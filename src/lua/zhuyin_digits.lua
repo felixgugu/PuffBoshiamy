@@ -9,8 +9,10 @@
 --   * Shift+digit (any time a menu is open)     -> highlight candidate
 --   * input does NOT end with a tone + plain digit -> input
 --   * menu open + space -> express_editor confirms the highlighted candidate
+--   * incomplete syllable (zhuyin_partial placeholder) + space -> swallow
 --   * no menu + space -> swallow (do not commit raw invalid zhuyin)
 --   * menu open + Return -> replay space (commit the highlighted candidate)
+--   * incomplete syllable + Return -> swallow
 --   * no menu + Return -> swallow (do not commit raw `w8 text)
 --
 -- Candidate selection only highlights; it does NOT commit.  The user presses
@@ -43,6 +45,20 @@ local function digit_from_key(key)
     return nil
   end
   return SHIFT_DIGIT[string.char(ch)]
+end
+
+-- True when the only thing keeping the segment alive is zhuyin_partial.lua's
+-- placeholder for an incomplete syllable (e.g. ` + 1 = ㄅ).
+local function is_partial(ctx)
+  local seg = ctx.composition:back()
+  if not seg or not seg.menu then
+    return false
+  end
+  if seg.menu:prepare(1) < 1 then
+    return false
+  end
+  local cand = seg:get_candidate_at(0)
+  return cand ~= nil and cand.type == "zhuyin_partial"
 end
 
 local function select_candidate(ctx, env, digit)
@@ -96,13 +112,16 @@ local function processor(key, env)
       return 2  -- Shift+Space cycles symbol shape; let symbol_shape handle it
     end
     if ctx:has_menu() then
+      if is_partial(ctx) then
+        return 1  -- incomplete syllable: never commit the placeholder
+      end
       return 2  -- let express_editor commit the highlighted candidate
     end
     return 1  -- swallow: do not commit invalid zhuyin as raw text
   end
 
   if ch == 0xFF0D or ch == 0xFF8D then  -- Return / KP_Enter
-    if ctx:has_menu() then
+    if ctx:has_menu() and not is_partial(ctx) then
       -- Replay Space so express_editor commits the highlighted candidate
       -- exactly like the space key (same commit path/notifier).
       env.engine:process_key(KeyEvent("space"))
@@ -116,6 +135,13 @@ local function processor(key, env)
   end
   if not ctx:has_menu() then
     return 2  -- no candidate yet: let the digit be zhuyin input
+  end
+
+  if is_partial(ctx) then
+    if key:shift() then
+      return 1  -- do not select the incomplete-syllable placeholder
+    end
+    return 2  -- plain digit continues the syllable
   end
 
   if not key:shift() then

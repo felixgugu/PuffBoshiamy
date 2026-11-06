@@ -71,6 +71,7 @@ engine:
     - table_translator@zhuyin
   filters:
     - lua_filter@symbol_shape_filter
+    - lua_filter@zhuyin_partial
     - uniquifier
     - lua_filter@boshiamy_hint
 
@@ -121,7 +122,12 @@ zhuyin:
   tips: "〔注音〕"
   dictionary: puffzhuyin
   alphabet: "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347"
-  enable_completion: false
+  # Completion is needed while a syllable is still incomplete: ` + 1 (ㄅ)
+  # has no dictionary entry of its own, and without a match Rime shows the
+  # raw key instead of the Bopomofo preedit.  zhuyin_partial.lua keeps the
+  # final candidate list exact (it drops completion candidates when an exact
+  # code exists and shows a single placeholder otherwise).
+  enable_completion: true
   enable_sentence: false
   enable_user_dict: false
   initial_quality: 0

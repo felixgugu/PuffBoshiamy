@@ -92,7 +92,8 @@ try {
         "lua\forgotten.lua",
         "lua\english_raw.lua",
         "lua\grave_guard.lua",
-        "lua\zhuyin_digits.lua"
+        "lua\zhuyin_digits.lua",
+        "lua\zhuyin_partial.lua"
     )
     foreach ($name in $required) {
         $p = Join-Path $dist $name

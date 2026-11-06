@@ -135,6 +135,28 @@ static void run_count_case(const char* name, const char* keys, int expect_count)
     g_api->destroy_session(session);
 }
 
+static void run_preedit_case(const char* name, const char* keys,
+                             const char* expect) {
+    RimeSessionId session = g_api->create_session();
+    if (!session) {
+        out("CASE %s: FAILED to create session\n", name);
+        return;
+    }
+    g_api->select_schema(session, "puffime");
+    send_string(session, keys);
+    RIME_STRUCT(RimeContext, ctx);
+    std::string preedit;
+    if (g_api->get_context(session, &ctx)) {
+        if (ctx.composition.preedit) preedit = ctx.composition.preedit;
+        g_api->free_context(&ctx);
+    }
+    bool ok = (preedit == expect);
+    out("CASE %-24s keys=[%s] preedit=[%s] expect [%s] %s\n",
+        name, keys, preedit.c_str(), expect, ok ? "OK" : "MISMATCH");
+    print_context(session);
+    g_api->destroy_session(session);
+}
+
 static void run_context_case(const char* name, const char* keys) {
     RimeSessionId session = g_api->create_session();
     if (!session) {
@@ -349,6 +371,15 @@ int main() {
     run_context_case("context-completion-aaa", "aaa");
     run_context_case("context-completion-i", "i");
     run_context_case("context-zhuyin-su3", "`su3");
+    run_preedit_case("zhuyin-preedit-initial-b", "`1", "ㄅ");
+    run_preedit_case("zhuyin-preedit-initial-zh", "`5", "ㄓ");
+    run_preedit_case("zhuyin-preedit-initial-b-vowel", "`1u", "ㄅㄧ");
+    run_preedit_case("zhuyin-preedit-initial-b-tone", "`1u6", "ㄅㄧˊ");
+    run_case("zhuyin-initial-b-space", "`1", ' ', "");
+    run_case("zhuyin-initial-b-enter", "`1", XK_Return, "");
+    run_preedit_case("zhuyin-preedit-partial-next-syllable", "`su3c",
+                     "ㄋㄧˇㄏ");
+    run_case("zhuyin-partial-next-syllable-space", "`su3c", ' ', "");
     run_context_case("context-zhuyin-su-toneless", "`su");
     run_context_case("context-zhuyin-su6", "`su6");
     run_context_case("context-zhuyin-su4", "`su4");
