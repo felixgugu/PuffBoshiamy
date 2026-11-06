@@ -375,6 +375,8 @@ int main() {
     run_preedit_case("zhuyin-preedit-initial-zh", "`5", "ㄓ");
     run_preedit_case("zhuyin-preedit-initial-b-vowel", "`1u", "ㄅㄧ");
     run_preedit_case("zhuyin-preedit-initial-b-tone", "`1u6", "ㄅㄧˊ");
+    run_preedit_case("zhuyin-preedit-ba", "`18", "ㄅㄚ");
+    run_context_case("context-zhuyin-ba", "`18");
     run_case("zhuyin-initial-b-space", "`1", ' ', "");
     run_case("zhuyin-initial-b-enter", "`1", XK_Return, "");
     run_preedit_case("zhuyin-preedit-partial-next-syllable", "`su3c",

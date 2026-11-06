@@ -81,6 +81,14 @@ Write-Host "==> copying package to $rimeDir"
 Invoke-Adb shell "mkdir -p '$rimeDir'" | Out-Null
 Invoke-Adb push "$PackageDir\." "$rimeDir/" | Out-Null
 
+# Migrate from the old PuffBoshiamy schema.  If the old files stay behind,
+# Trime keeps deploying them and can keep selecting puffboshiamy instead of
+# the new puffime schema (which is what made the Zhuyin fix appear missing
+# on Android).
+Write-Host "==> removing old PuffBoshiamy schema files"
+Invoke-Adb shell "rm -f '$rimeDir/puffboshiamy.schema.yaml' '$rimeDir/puffboshiamy.dict.yaml' '$rimeDir/build/puffboshiamy.'*" | Out-Null
+Invoke-Adb shell "rm -rf '$rimeDir/puffboshiamy.userdb'" | Out-Null
+
 $required = @(
     "puffime.schema.yaml",
     "puffzhuyin.schema.yaml",
@@ -89,7 +97,8 @@ $required = @(
     "rime.lua",
     "default.custom.yaml",
     "trime.custom.yaml",
-    "lua\zhuyin_key.lua"
+    "lua\zhuyin_key.lua",
+    "lua\zhuyin_partial.lua"
 )
 foreach ($name in $required) {
     $remote = "$rimeDir/" + ($name -replace "\\", "/")

@@ -41,6 +41,12 @@ powershell -ExecutionPolicy Bypass -File tools\install_trime_phone.ps1
 > 如果你的檔案管理器可以直接進入 `Android/data`，也可以把 zip 內容
 > 直接放到這個資料夾，再按「部署」。
 
+> **從舊的 PuffBoshiamy 升級**：如果之前裝過舊版，使用者資料夾與 `build/`
+> 裡會留著 `puffboshiamy.*`。只覆蓋新檔案的話，Trime 可能仍選用舊的
+> `puffboshiamy` 方案，注音的修正就不會生效。請刪除這些舊檔（包含
+> `puffboshiamy.userdb`），或在電腦上跑 `tools\install_trime_phone.ps1`
+> （會自動移除），再按「部署」並在「方案」選擇 **泡芙輸入法**。
+
 > 注意：如果鍵盤看起來還是 Gboard（英文 QWERTY、空白鍵寫 English），
 > 要先在 Android 設定 → 系統 → 語言與輸入 → 螢幕鍵盤 啟用 Trime，
 > 並用鍵盤切換鍵選 Trime。這不是本方案的問題。
@@ -119,10 +125,12 @@ Trime 鍵盤底部、空白鍵左邊有一顆 **「中文」/「注音」** 鍵�
 
 ## 實機驗證
 
-Android 16 + Trime 3.3.13 已測試：
+Android 17 + Trime 3.3.14 已測試：
 
 - [x] 底部「中文／注音」鍵：按一下切中文＋換成 ㄅㄆㄇ 注音鍵盤＋進注音
 - [x] 注音鍵盤上按 `ㄅ` + `ㄚ` + 空白 → 吧
+- [x] 只按 `ㄅ` → preedit 顯示 `ㄅ`，不是按鍵 `1`；空白不上屏
+- [x] `ㄅ` + `ㄚ` 的候選列正常（吧、把、八…）
 - [x] 注音鍵盤上按 `ㄋ` + `ㄧ` + `ˇ` + 空白 → 你
 - [x] 注音上屏後自動切回 QWERTY；可直接打 `a` + 空白 → 對
 - [x] 注音選字（`2` + 空白）上屏後也自動返回
