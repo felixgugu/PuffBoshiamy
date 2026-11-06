@@ -106,7 +106,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_trime.ps1
 
 ## Mac / iOS（未實機測試）
 
-> 目前沒有 Mac / iPhone 實機測試，以下是可行方向，歡迎有裝置的人回報。
+> 目前沒有 Mac / iPhone 實機測試，以下是可行方向。
 
 ### macOS：Squirrel（鼠鬚管）
 
