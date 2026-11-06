@@ -104,6 +104,61 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_trime.ps1
 > 如果鍵盤看起來還是 Gboard（空白鍵寫 English），先到 Android 設定 →
 > 系統 → 語言與輸入 → 螢幕鍵盤啟用 Trime，再用鍵盤切換鍵選 Trime。
 
+## Mac / iOS（未實機測試）
+
+> 目前沒有 Mac / iPhone 實機測試，以下是可行方向，歡迎有裝置的人回報。
+
+### macOS：Squirrel（鼠鬚管）
+
+1. 安裝 [Squirrel](https://github.com/rime/squirrel/releases/latest)（macOS 13+）。
+2. 用 Python 3 產生字典（或從 Windows 版複製 `puffime.dict.yaml`、`puffzhuyin.dict.yaml`、`lua/`）：
+
+   ```bash
+   python3 tools/make_zhuyin.py
+   python3 tools/make_dict.py --input data/liu7.cin --essay data/essay.txt --out dist
+   ```
+
+3. 把檔案放到 `~/Library/Rime`：
+
+   ```bash
+   mkdir -p ~/Library/Rime
+   cp src/puffime.schema.yaml src/puffzhuyin.schema.yaml src/rime.lua src/default.custom.yaml ~/Library/Rime/
+   cp -R src/lua ~/Library/Rime/
+   cp dist/puffime.dict.yaml dist/puffzhuyin.dict.yaml ~/Library/Rime/
+   ```
+
+4. 點 Squirrel 選單 →「重新部署」，再選「泡芙輸入法」。
+5. 注意：
+   - `install.bat`、`make_dict.exe`、`rime_deploy.exe` 是 Windows 專用。
+   - `weasel.custom.yaml` 不適用；Mac 要用 `squirrel.custom.yaml`（目前未提供）。
+   - `,,fk` / `,,fl` 的 `forgotten.lua` 目前寫死 `%APPDATA%`，macOS 可能無法使用，需另外改路徑。
+   - `.ico` 圖示是 Windows 用，Mac 會忽略。
+
+### iOS：Hamster（仓输入法）或 iRime
+
+iOS 不能在本機 build，必須先在 Mac / Windows 產生字典。
+
+1. 安裝 [Hamster（仓输入法）](https://apps.apple.com/app/id6446617683)（iOS 16+）或 iRime。
+2. 在電腦上 build 出字典（同 macOS 步驟）。
+3. 把以下檔案放在 zip 的根目錄（不要多一層資料夾）：
+   - `puffime.schema.yaml`
+   - `puffzhuyin.schema.yaml`
+   - `puffime.dict.yaml`
+   - `puffzhuyin.dict.yaml`
+   - `rime.lua`
+   - `lua/`
+   - `default.custom.yaml`
+4. Hamster → 輸入方案設定 → `+` → 匯入方案 → 選 zip；或用 Wi-Fi 上傳。
+5. 按「重新部署」，到 iOS 設定 → 一般 → 鍵盤 → 加入 Hamster，開啟「允許完全訪問」。
+6. 選「泡芙輸入法」。
+
+注意：
+
+- iOS 鍵盤擴充有記憶體限制，字典＋Lua 要實測。
+- Hamster 對 `rime.lua` 全域載入、`lua_processor` / `lua_filter` 的相容性要測；如果不支援，要改成模組化 Lua。
+- `forgotten.lua` 在 iOS sandbox 可能無法使用。
+- 目前沒有官方 iOS 套件，以上是自行嘗試方向。
+
 ## 注意
 
 - 只支援 Windows 10/11 x64。
