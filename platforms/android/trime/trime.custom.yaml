@@ -1,0 +1,27 @@
+# Trime keyboard customization for PuffIME.
+#
+# The default keyboard's Mode_switch key becomes a "注音" key.  Pressing
+# it sends F12; zhuyin_key.lua switches to Chinese, selects Trime's
+# built-in Bopomofo (ㄅㄆㄇ) keyboard and starts Zhuyin.  Long-press
+# keeps Mode_switch for Chinese/English toggling.
+#
+# In the Bopomofo keyboard the same corner is a "嘸蝦米" key that returns
+# to the default QWERTY keyboard.  reset_ascii_mode keeps the Bopomofo
+# keyboard in Chinese mode.
+
+patch:
+  preset_keys/Zhuyin:
+    label: 注音
+    send: F12
+  preset_keys/Boshiamy:
+    label: 嘸蝦米
+    send: F11
+  "preset_keyboards/default/keys/@42":
+    click: Zhuyin
+    long_click: Mode_switch
+    width: 10
+  "preset_keyboards/bopomofo/reset_ascii_mode": true
+  "preset_keyboards/bopomofo/keys/@41":
+    click: Boshiamy
+    long_click: Mode_switch
+    width: 10

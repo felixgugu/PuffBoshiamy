@@ -1,0 +1,7 @@
+# PuffIME global config
+patch:
+  schema_list:
+    - schema: puffime
+  switcher/hotkeys:
+    - Control+grave
+    - F4

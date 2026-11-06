@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+
+# build output
+dist/
+build/
+*.table.bin
+*.prism.bin
+*.reverse.bin
+*.userdb/
+
+# local dev artifacts
+tools/*.exe
+tools/harness-output.txt
+tools/exports.txt
+tools/harness-logs/
+*.obj
+*.pdb
+release/
+/boshiamy.lime
+/liu7.cin
+
+# proprietary input tables (not distributed in the public repo)
+/data/liu7.cin
+/data/boshiamy.lime

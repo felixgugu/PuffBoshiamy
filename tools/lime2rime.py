@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Convert boshiamy.lime (LIME table) into a Rime table dictionary.
+
+Input format:  code <TAB> text
+Output format: text <TAB> code <TAB> weight
+
+The source table has no weights.  We preserve the file order by assigning
+strictly decreasing weights, so the first candidate on a line always comes
+first in Rime's candidate list.
+
+Usage:
+    python tools/lime2rime.py
+    python tools/lime2rime.py --input data/boshiamy.lime --output dist/puffime.dict.yaml
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import io
+import re
+import sys
+import unicodedata
+from pathlib import Path
+
+BOSHIAMY_CODE_RE = re.compile(r"^[a-z,.\[\]']+$")
+BASE_WEIGHT = 1_000_000
+
+
+def configure_stdout() -> None:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+
+def read_lime(path: Path):
+    """Return [(code, text, lineno)] with all BOMs stripped."""
+    raw = path.read_text(encoding="utf-8-sig")
+    entries = []
+    for lineno, line in enumerate(raw.splitlines(), 1):
+        # The file was concatenated from several sources and contains stray
+        # BOMs at the beginning of some later chunks (lines 33583, 39903,
+        # 40152).  Strip every BOM, not just the leading one.
+        line = line.replace("\ufeff", "")
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            entries.append(("#MALFORMED", line, lineno))
+            continue
+        code = parts[0].strip()
+        text = parts[1].strip()
+        if not code or not text:
+            entries.append(("#EMPTY", line, lineno))
+            continue
+        entries.append((code, text, lineno))
+    return entries
+
+
+def read_cin(path: Path):
+    """Return [(code, text, lineno)] from a %gen_inp CIN table.
+
+    CIN format:
+        %gen_inp
+        ...
+        %chardef begin
+        <code> <TAB or spaces> <text>
+        ...
+        %chardef end
+    """
+    raw = path.read_text(encoding="utf-8-sig")
+    entries = []
+    in_chardef = False
+    for lineno, line in enumerate(raw.splitlines(), 1):
+        stripped = line.strip()
+        if stripped == "%chardef begin":
+            in_chardef = True
+            continue
+        if stripped == "%chardef end":
+            break
+        if not in_chardef or not stripped:
+            continue
+        parts = re.split(r"\s+", stripped, maxsplit=1)
+        if len(parts) < 2:
+            entries.append(("#MALFORMED", stripped, lineno))
+            continue
+        code = parts[0].strip()
+        text = parts[1].strip()
+        if not code or not text:
+            entries.append(("#EMPTY", stripped, lineno))
+            continue
+        entries.append((code, text, lineno))
+    return entries
+
+
+def read_source(path: Path):
+    """Detect CIN vs LIME and return (entries, format)."""
+    head = path.read_bytes()[:256].decode("utf-8-sig", errors="replace")
+    if head.lstrip().startswith("%gen_inp") or "%chardef" in head:
+        return read_cin(path), "cin"
+    return read_lime(path), "lime"
+
+
+def build(entries):
+    """Group entries by code, preserving source order, and assign weights."""
+    by_code = collections.OrderedDict()
+    exact_seen = set()
+    duplicates = []
+    invalid_codes = []
+    invalid_texts = []
+    pua = []
+    non_bmp = []
+    malformed = []
+
+    for code, text, lineno in entries:
+        if code.startswith("#"):
+            malformed.append((code, text, lineno))
+            continue
+        if not BOSHIAMY_CODE_RE.match(code):
+            invalid_codes.append((code, text, lineno))
+        if len(text) != 1:
+            invalid_texts.append((code, text, lineno))
+        key = (code, text)
+        if key in exact_seen:
+            duplicates.append((code, text, lineno))
+            continue
+        exact_seen.add(key)
+        by_code.setdefault(code, []).append((text, lineno))
+        for ch in text:
+            cp = ord(ch)
+            if 0xE000 <= cp <= 0xF8FF:
+                pua.append((code, text, lineno))
+            if cp > 0xFFFF:
+                non_bmp.append((code, text, lineno))
+
+    rows = []
+    index = 0
+    for code, items in by_code.items():
+        for text, _lineno in items:
+            rows.append((code, text, BASE_WEIGHT - index))
+            index += 1
+    return {
+        "rows": rows,
+        "by_code": by_code,
+        "duplicates": duplicates,
+        "invalid_codes": invalid_codes,
+        "invalid_texts": invalid_texts,
+        "malformed": malformed,
+        "pua": pua,
+        "non_bmp": non_bmp,
+    }
+
+
+def write_dict(rows, output: Path, source: Path, fmt: str) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    out = io.StringIO()
+    out.write("# Rime dictionary\n")
+    out.write(f"# Generated by tools/lime2rime.py from {source} ({fmt})\n")
+    out.write("# Do not edit by hand.\n")
+    out.write("---\n")
+    out.write("name: puffime\n")
+    out.write('version: "0.1"\n')
+    out.write("sort: by_weight\n")
+    out.write("use_preset_vocabulary: false\n")
+    out.write("...\n")
+    out.write("\n")
+    for code, text, weight in rows:
+        out.write(f"{text}\t{code}\t{weight}\n")
+    output.write_text(out.getvalue(), encoding="utf-8")
+
+
+def write_report(data, source: Path, output: Path, fmt: str) -> None:
+    rows = data["rows"]
+    by_code = data["by_code"]
+    out = io.StringIO()
+    w = lambda *a: print(*a, file=out)
+
+    w("# boshiamy table -> Rime dictionary report")
+    w(f"source: {source} ({fmt})")
+    w(f"output: {output}")
+    w(f"source entries (valid): {sum(len(v) for v in by_code.values()) + len(data['duplicates'])}")
+    w(f"dictionary entries: {len(rows)}")
+    w(f"unique codes: {len(by_code)}")
+    w("code length distribution: " + ", ".join(
+        f"{n}:{sum(1 for c in by_code if len(c) == n)}" for n in range(1, 7)))
+    w("candidates per code: " + ", ".join(
+        f"{n}:{cnt}" for n, cnt in sorted(collections.Counter(len(v) for v in by_code.values()).items())))
+    w(f"exact duplicate (code, text) removed: {len(data['duplicates'])}")
+    if data["duplicates"]:
+        w("  first 10: " + ", ".join(f"{c}={t}@{ln}" for c, t, ln in data["duplicates"][:10]))
+    w(f"invalid codes: {len(data['invalid_codes'])}")
+    if data["invalid_codes"]:
+        w("  " + ", ".join(f"{c}={t}@{ln}" for c, t, ln in data["invalid_codes"][:20]))
+    w(f"invalid text lengths: {len(data['invalid_texts'])}")
+    if data["invalid_texts"]:
+        w("  " + ", ".join(f"{c}={t}@{ln}" for c, t, ln in data["invalid_texts"][:20]))
+    w(f"malformed lines: {len(data['malformed'])}")
+    if data["malformed"]:
+        w("  " + ", ".join(f"{c}={t}@{ln}" for c, t, ln in data["malformed"][:20]))
+    w(f"PUA targets: {len(data['pua'])}")
+    if data["pua"]:
+        w("  " + ", ".join(f"{c}={t}@{ln}" for c, t, ln in data["pua"][:20]))
+    w(f"non-BMP targets: {len(data['non_bmp'])}")
+    w("top duplicate codes: " + ", ".join(
+        f"{c}({len(v)})" for c, v in sorted(by_code.items(), key=lambda kv: -len(kv[1]))[:12]))
+    w("first 10 rows: " + ", ".join(f"{t}={c}:{w_}" for c, t, w_ in rows[:10]))
+    w("last 10 rows: " + ", ".join(f"{t}={c}:{w_}" for c, t, w_ in rows[-10:]))
+    (output.parent / "boshiamy-report.txt").write_text(out.getvalue(), encoding="utf-8")
+
+
+def main() -> int:
+    configure_stdout()
+    root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=Path, default=None,
+                        help="LIME or CIN table; defaults to data/liu7.cin if present, else data/boshiamy.lime")
+    parser.add_argument("--output", type=Path, default=root / "dist" / "puffime.dict.yaml")
+    args = parser.parse_args()
+
+    source = args.input
+    if source is None:
+        for candidate in (root / "data" / "liu7.cin", root / "data" / "boshiamy.lime"):
+            if candidate.exists():
+                source = candidate
+                break
+        if source is None:
+            raise SystemExit("no source table found (data/liu7.cin or data/boshiamy.lime)")
+
+    entries, fmt = read_source(source)
+    data = build(entries)
+    write_dict(data["rows"], args.output, source, fmt)
+    write_report(data, source, args.output, fmt)
+
+    print(f"source: {source.name} ({fmt})  entries: {len(data['rows'])}  "
+          f"codes: {len(data['by_code'])}  dups: {len(data['duplicates'])}  "
+          f"pua: {len(data['pua'])}  invalid codes: {len(data['invalid_codes'])}  "
+          f"output: {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

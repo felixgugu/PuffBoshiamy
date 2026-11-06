@@ -1,0 +1,52 @@
+# Dependency schema for the puffzhuyin dictionary.
+#
+# Rime's SchemaUpdate task only compiles the *primary* dictionary
+# (translator/dictionary) of each schema.  A dictionary used by a named
+# translator (table_translator@zhuyin) must therefore have its own dependency
+# schema.  This schema is not listed in default.custom.yaml, so it never
+# appears in the schema menu.
+
+schema:
+  schema_id: puffzhuyin
+  name: "〔依賴〕Puff 注音"
+  version: "0.1"
+  author:
+    - PuffIME
+  description: |
+    供 puffime 使用的注音字典。依賴方案，不列入選單。
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 英文 ]
+
+engine:
+  processors:
+    - ascii_composer
+    - recognizer
+    - key_binder
+    - speller
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - matcher
+    - abc_segmentor
+    - fallback_segmentor
+  translators:
+    - table_translator
+  filters:
+    - uniquifier
+
+speller:
+  alphabet: "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347"
+  max_code_length: 32
+  auto_select: false
+
+translator:
+  dictionary: puffzhuyin
+  enable_completion: false
+  enable_sentence: false
+  enable_user_dict: false
+  initial_quality: 0

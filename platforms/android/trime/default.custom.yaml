@@ -1,0 +1,5 @@
+# Trime global config for PuffIME
+patch:
+  schema_list:
+    - schema: puffime
+    - schema: luna_pinyin

@@ -1,0 +1,196 @@
+# Rime schema: PuffIME
+# 嘸蝦米 + 英文原文候選 + 第一碼 ` 進入大千注音
+#
+# Segment layout:
+#   abc segment   -> table_translator (puffime) + lua_translator@english_raw
+#   zhuyin segment -> table_translator@zhuyin (puffzhuyin)
+#
+# The backtick is accepted by the recognizer pattern only as the FIRST key.
+# The zhuyin keys include digits and ; / - which are deliberately NOT in the
+# boshiamy speller alphabet, so in boshiamy mode plain digits still select
+# candidates, while in zhuyin mode digits are input.
+
+schema:
+  schema_id: puffime
+  name: 泡芙輸入法
+  version: "0.1"
+  icon: puff.ico
+  ascii_icon: puff_ascii.ico
+  author:
+    - PuffIME
+  description: |
+    嘸蝦米 + 英文原文候選。
+    第一碼輸入 ` 進入大千注音。
+  dependencies:
+    - puffzhuyin
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [ 中文, 英文 ]
+  # Three-state symbol shape, cycled with Shift+Space:
+  #   ascii_punct=1, full_shape=0 -> half
+  #   ascii_punct=0, full_shape=0 -> natural
+  #   ascii_punct=0, full_shape=1 -> full
+  - name: ascii_punct
+    reset: 1
+    states: [ 自然符號, 半形符號 ]
+  - name: full_shape
+    reset: 0
+    states: [ 非全形, 全形 ]
+
+engine:
+  processors:
+    - ascii_composer
+    - lua_processor@grave_guard
+    - lua_processor@zhuyin_digits
+    - lua_processor@boshiamy_v
+    - lua_processor@boshiamy_space
+    - lua_processor@symbol_shape
+    - recognizer
+    - key_binder
+    - speller
+    - punctuator
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - matcher
+    - affix_segmentor@forgotten
+    - affix_segmentor@zhuyin
+    - abc_segmentor
+    - punct_segmentor
+    - fallback_segmentor
+  translators:
+    - punct_translator
+    - table_translator
+    - lua_translator@boshiamy_completion
+    - lua_translator@english_raw
+    - lua_translator@forgotten
+    - table_translator@zhuyin
+  filters:
+    - lua_filter@symbol_shape_filter
+    - uniquifier
+    - lua_filter@boshiamy_hint
+
+speller:
+  alphabet: "abcdefghijklmnopqrstuvwxyz,.[]'"
+  max_code_length: 32
+  auto_select: false
+  use_space: false
+
+# Boshiamy table translator (tag defaults to abc)
+#
+# Only exact codes come from the table.  Prefix completion is provided by
+# lua_translator@boshiamy_completion, which orders characters by essay
+# frequency instead of librime's "shorter remaining code first" order.
+# enable_user_dict is deliberately false: Rime's user dictionary promotes
+# recently selected candidates, which changes the official table order.
+translator:
+  dictionary: puffime
+  enable_completion: false
+  enable_sentence: false
+  enable_user_dict: false
+  initial_quality: 0
+
+# Prefix completion, ordered by common-character frequency.
+# src/lua/boshiamy_completion.lua reads boshiamy_completion_data.lua, which
+# tools/make_hints.py generates from the table + data/essay.txt.
+boshiamy_completion:
+  tag: abc
+
+# Raw input candidate: shows the current letters as English (英).
+english_raw:
+  tag: abc
+
+# Forgotten-code list: type ,,fk
+# The prefix is ,,f; the trailing k makes a non-empty code segment so the
+# affix segmentor creates a translator segment.
+forgotten:
+  tag: forgotten
+  prefix: ",,f"
+  tips: "〔忘記清單〕"
+
+# Zhuyin affix translator.  The same section is read by
+# affix_segmentor@zhuyin (tag/prefix/tips) and table_translator@zhuyin
+# (dictionary/alphabet/...).
+zhuyin:
+  tag: zhuyin
+  prefix: "`"
+  tips: "〔注音〕"
+  dictionary: puffzhuyin
+  alphabet: "1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347"
+  enable_completion: false
+  enable_sentence: false
+  enable_user_dict: false
+  initial_quality: 0
+  preedit_format:
+    - "xlit|1qaz2wsxedcrfv5tgbyhnujm8ik,9ol.0p;/-6347|ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦˊˇˋ˙|"
+
+punctuator:
+  import_preset: symbols
+  # Natural symbol mode: Chinese punctuation/brackets stay full-width while
+  # ASCII symbols are half-width.  Half mode bypasses the punctuator via
+  # ascii_punct=1; full mode uses the preset full_shape map.
+  half_shape:
+    '$': [ '$', '￥', '€', '£' ]
+    '/': [ '/', '／' ]
+    "\\": [ "\\", '＼' ]
+    '|': [ '|', '｜' ]
+    '<': [ '<', '《', '〈' ]
+    '>': [ '>', '》', '〉' ]
+    '^': [ '^', '……' ]
+    '_': [ '_', '——' ]
+
+recognizer:
+  patterns:
+    # Disable the default uppercase passthrough; Shift is used for candidate
+    # selection via key_binder.
+    uppercase: ''
+    # Only the first key can start zhuyin.
+    zhuyin: '^`[0-9a-z,.;/-]*$'
+    # Forgotten-code list: ,,fk (prefix ,,f + code k).
+    forgotten: '^,,f.*$'
+    # Weasel's built-in /X symbol menu.
+    punct: '^/([0-9]0?|[A-Za-z]+)$'
+
+menu:
+  page_size: 9
+
+selector:
+  bindings:
+    Tab: next_candidate
+    Shift+Tab: previous_candidate
+    ISO_Left_Tab: previous_candidate
+
+ascii_composer:
+  good_old_caps_lock: true
+  switch_key:
+    Shift_L: noop
+    Shift_R: noop
+    Caps_Lock: clear
+    Control_L: noop
+    Control_R: noop
+    Eisu_toggle: clear
+
+key_binder:
+  bindings:
+    # Boshiamy codes use comma and period; keep them out of paging.
+    - { when: has_menu, accept: comma, send: comma }
+    - { when: paging, accept: comma, send: comma }
+    - { when: has_menu, accept: period, send: period }
+    - { when: paging, accept: period, send: period }
+
+    # Shift+number selects candidates.  This is needed inside the zhuyin
+    # segment because plain digits are zhuyin input there.
+    - { when: has_menu, accept: Shift+exclam, send: KP_1 }
+    - { when: has_menu, accept: Shift+at, send: KP_2 }
+    - { when: has_menu, accept: Shift+numbersign, send: KP_3 }
+    - { when: has_menu, accept: Shift+dollar, send: KP_4 }
+    - { when: has_menu, accept: Shift+percent, send: KP_5 }
+    - { when: has_menu, accept: Shift+asciicircum, send: KP_6 }
+    - { when: has_menu, accept: Shift+ampersand, send: KP_7 }
+    - { when: has_menu, accept: Shift+asterisk, send: KP_8 }
+    - { when: has_menu, accept: Shift+parenleft, send: KP_9 }
+    - { when: has_menu, accept: Shift+parenright, send: KP_0 }
