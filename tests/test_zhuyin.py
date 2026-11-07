@@ -28,6 +28,7 @@ class TestZhuyin(unittest.TestCase):
         cls.toneless_by_code = {}
         for text, code, weight, _kind in cls.toneless:
             cls.toneless_by_code.setdefault(code, []).append((text, weight))
+        cls.prefix_completion = z.build_prefix_completion(cls.items)
 
     def test_known_readings(self):
         cases = {
@@ -100,6 +101,37 @@ class TestZhuyin(unittest.TestCase):
             self.assertNotEqual(code[-1], "6")
             self.assertNotEqual(code[-1], "7")
 
+    def test_prefix_completion(self):
+        pc = self.prefix_completion
+        # A bare initial has no exact entry, so it gets a completion list.
+        self.assertIn("1", pc)
+        self.assertGreater(len(pc["1"]), 1000)
+        self.assertEqual(pc["1"][0][0], "不")
+        self.assertEqual(pc["q"][0][0], "怕")
+        # Characters with the exact code stay out; only longer syllables are
+        # added after the exact candidates.
+        top5 = [text for text, _code in pc["5"]]
+        self.assertNotIn("之", top5)
+        self.assertEqual(pc["5"][0][0], "中")
+        # Complete syllables without longer codes have no completion list.
+        for code in ("18", "su3", "ji3", "1u0", "su3c"):
+            self.assertNotIn(code, pc)
+
+    def test_prefix_completion_codes(self):
+        pc = self.prefix_completion
+        codes_by_text = {}
+        for text, code, _weight, _kind in self.items:
+            if len(text) == 1:
+                codes_by_text.setdefault(text, set()).add(code)
+        for prefix, entries in pc.items():
+            self.assertGreater(len(prefix), 0)
+            seen = set()
+            for text, code in entries:
+                self.assertNotIn(text, seen, prefix)
+                seen.add(text)
+                self.assertTrue(code.startswith(prefix), (prefix, code))
+                self.assertNotIn(prefix, codes_by_text[text], (prefix, text))
+
     def test_dist_file_if_built(self):
         dist = ROOT / "dist" / "puffzhuyin.dict.yaml"
         if not dist.exists():
@@ -113,6 +145,17 @@ class TestZhuyin(unittest.TestCase):
         self.assertIn("呢\tsu\t", text)
         self.assertIn("擬\tsu\t", text)
         self.assertIn("我\tji\t", text)
+
+    def test_completion_file_if_built(self):
+        path = ROOT / "dist" / "lua" / "zhuyin_completion_data.lua"
+        if not path.exists():
+            self.skipTest("dist not built")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn('["1"]', text)
+        self.assertIn('["1u"]', text)
+        self.assertNotIn('["18"]', text)
+        # Tabs are escaped in the generated Lua string literal.
+        self.assertIn("不\\t", text)
 
 
 if __name__ == "__main__":

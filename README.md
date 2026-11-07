@@ -9,7 +9,7 @@ Windows / Android 的**嘸蝦米輸入法**，用 Rime 打造。
 
 - **嘸蝦米**：打一碼就列出所有候選字，常用字優先；每多打一碼就縮小。
 - **注音**：打 `` ` `` 直接切注音，不用換輸入法。
-- **英文**：直接打，候選列最後有原文；Enter 一定出英文。
+- **英文**：直接打，候選列最後有原文；可連打整句，Enter 上屏。
 - **順手功能**：`v` 快速選第 2 個、符號形狀、`/X` 符號選單、五款配色。
 
 ## Windows 安裝
@@ -37,8 +37,8 @@ Windows / Android 的**嘸蝦米輸入法**，用 Rime 打造。
 | 打嘸蝦米碼 | 例如 `a` → 對；空白上屏 |
 | 選字 | 數字鍵 `1`–`0` |
 | 翻頁 | `PageUp` / `PageDown` |
-| 英文 | 直接打；候選列最後是原文，`Enter` 直接上屏 |
-| 注音 | 先打 `` ` ``，再打注音，例如 `` `su3 `` → 你 |
+| 英文 | 直接打；`Enter` 上屏原文，可連打英文句子 |
+| 注音 | 先打 `` ` ``，再打注音，例如 `` `su3 `` → 你；打一碼會列出常用字 |
 | `v` | 有候選時，快速上屏第 2 個候選 |
 | `Shift+Space` | 切換符號形狀（半形 → 自然 → 全形） |
 | `CapsLock` | 英文模式（長英文用） |
@@ -124,6 +124,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_trime.ps1
    mkdir -p ~/Library/Rime
    cp src/puffime.schema.yaml src/puffzhuyin.schema.yaml src/rime.lua src/default.custom.yaml ~/Library/Rime/
    cp -R src/lua ~/Library/Rime/
+   cp dist/lua/*.lua ~/Library/Rime/lua/
    cp dist/puffime.dict.yaml dist/puffzhuyin.dict.yaml ~/Library/Rime/
    ```
 

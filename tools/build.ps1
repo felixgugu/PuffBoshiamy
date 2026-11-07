@@ -6,6 +6,7 @@
 #   dist/puffime.dict.yaml   (from data/liu7.cin by default)
 #   dist/puffzhuyin.dict.yaml     (from terra_pinyin + essay)
 #   dist/lua/boshiamy_completion_data.lua (prefix -> essay-frequency order)
+#   dist/lua/zhuyin_completion_data.lua   (zhuyin prefix -> essay-frequency order)
 # Copied files:
 #   src/*.yaml, src/lua/*.lua
 
@@ -93,7 +94,10 @@ try {
         "lua\english_raw.lua",
         "lua\grave_guard.lua",
         "lua\zhuyin_digits.lua",
-        "lua\zhuyin_partial.lua"
+        "lua\zhuyin_partial.lua",
+        "lua\zhuyin_completion.lua",
+        "lua\zhuyin_completion_data.lua",
+        "lua\zhuyin_bopomofo.lua"
     )
     foreach ($name in $required) {
         $p = Join-Path $dist $name

@@ -1,36 +1,21 @@
--- Placeholder candidate for an incomplete Zhuyin syllable.
+-- Zhuyin completion filter.
 --
--- A bare initial such as 1 (ㄅ) or q (ㄆ) cannot be a syllable on its own, so
--- the dictionary has no entry for it.  Rime then leaves the segment in the
--- kVoid state and preedit_format is not applied; typing ` + 1 displayed the
--- raw "1" instead of "ㄅ".
+-- An incomplete code such as 1 (ㄅ) or q (ㄆ) cannot be a syllable on its
+-- own, so the dictionary has no exact entry for it.  Rime's completion is
+-- enabled to keep the segment alive (otherwise preedit_format is not applied
+-- and the raw "1" is displayed instead of "ㄅ").  The completion list itself
+-- comes from lua_translator@zhuyin_completion, which is ordered by essay
+-- frequency; librime's own completion candidates are dropped here because
+-- their order is by remaining code length.
 --
--- The zhuyin translator therefore enables completion, which makes an
--- incomplete code still produce candidates.  This filter removes those
--- completion candidates.  When an exact code exists the candidate list is
--- left exactly as before; otherwise a single placeholder is emitted so the
--- segment survives and its Bopomofo preedit is shown.  The placeholder is
--- not committable: zhuyin_digits.lua swallows Space/Enter while it is the
--- only candidate.
+-- Candidates that are not built-in completion candidates (exact table
+-- candidates plus zhuyin_completion candidates) pass through unchanged.
+-- Only when nothing is left (e.g. `su3c or `ji2) is a single placeholder
+-- emitted so the segment survives and its Bopomofo preedit is shown.  The
+-- placeholder is not committable: zhuyin_digits.lua swallows Space/Enter
+-- while it is the only candidate.
 
-local BOPOMOFO = {
-  ["1"] = "ㄅ", ["q"] = "ㄆ", ["a"] = "ㄇ", ["z"] = "ㄈ",
-  ["2"] = "ㄉ", ["w"] = "ㄊ", ["s"] = "ㄋ", ["x"] = "ㄌ",
-  ["e"] = "ㄍ", ["d"] = "ㄎ", ["c"] = "ㄏ",
-  ["r"] = "ㄐ", ["f"] = "ㄑ", ["v"] = "ㄒ",
-  ["5"] = "ㄓ", ["t"] = "ㄔ", ["g"] = "ㄕ", ["b"] = "ㄖ",
-  ["y"] = "ㄗ", ["h"] = "ㄘ", ["n"] = "ㄙ",
-  ["u"] = "ㄧ", ["j"] = "ㄨ", ["m"] = "ㄩ",
-  ["8"] = "ㄚ", ["i"] = "ㄛ", ["k"] = "ㄜ", [","] = "ㄝ",
-  ["9"] = "ㄞ", ["o"] = "ㄟ", ["l"] = "ㄠ", ["."] = "ㄡ",
-  ["0"] = "ㄢ", ["p"] = "ㄣ", [";"] = "ㄤ", ["/"] = "ㄥ",
-  ["-"] = "ㄦ",
-  ["6"] = "ˊ", ["3"] = "ˇ", ["4"] = "ˋ", ["7"] = "˙",
-}
-
-local function to_bopomofo(code)
-  return (code:gsub(".", BOPOMOFO))
-end
+local bopomofo = require("zhuyin_bopomofo")
 
 local function filter(input, env)
   local ctx = env.engine.context
@@ -42,20 +27,19 @@ local function filter(input, env)
     return
   end
 
-  -- Completion candidates are only used to keep an incomplete syllable alive.
-  -- Exact table candidates come first, so stop at the first completion.
-  local saw_exact = false
+  local saw_candidate = false
   for cand in input:iter() do
-    if cand.type == "completion" then
-      break
+    -- Built-in completion is only used to keep an incomplete code alive;
+    -- zhuyin_completion.lua supplies the actual, frequency-ordered list.
+    if cand.type ~= "completion" then
+      saw_candidate = true
+      yield(cand)
     end
-    saw_exact = true
-    yield(cand)
   end
 
-  if not saw_exact then
+  if not saw_candidate then
     local code = ctx.input:sub(seg.start + 1, seg._end)
-    local symbols = to_bopomofo(code)
+    local symbols = bopomofo.to_bopomofo(code)
     local cand = Candidate("zhuyin_partial", seg.start, seg._end,
                            symbols, "")
     cand.preedit = symbols

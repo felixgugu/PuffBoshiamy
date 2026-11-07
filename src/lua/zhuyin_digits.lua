@@ -9,10 +9,10 @@
 --   * Shift+digit (any time a menu is open)     -> highlight candidate
 --   * input does NOT end with a tone + plain digit -> input
 --   * menu open + space -> express_editor confirms the highlighted candidate
---   * incomplete syllable (zhuyin_partial placeholder) + space -> swallow
+--   * only the zhuyin_partial placeholder + space -> swallow
 --   * no menu + space -> swallow (do not commit raw invalid zhuyin)
 --   * menu open + Return -> replay space (commit the highlighted candidate)
---   * incomplete syllable + Return -> swallow
+--   * only the placeholder + Return -> swallow
 --   * no menu + Return -> swallow (do not commit raw `w8 text)
 --
 -- Candidate selection only highlights; it does NOT commit.  The user presses
@@ -48,7 +48,9 @@ local function digit_from_key(key)
 end
 
 -- True when the only thing keeping the segment alive is zhuyin_partial.lua's
--- placeholder for an incomplete syllable (e.g. ` + 1 = ㄅ).
+-- placeholder.  This happens for codes with neither an exact entry nor any
+-- longer code starting with them (e.g. `su3c = ㄋㄧˇㄏ), not for ` + 1,
+-- which now has real prefix-completion candidates.
 local function is_partial(ctx)
   local seg = ctx.composition:back()
   if not seg or not seg.menu then

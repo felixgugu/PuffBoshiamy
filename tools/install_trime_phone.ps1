@@ -98,7 +98,10 @@ $required = @(
     "default.custom.yaml",
     "trime.custom.yaml",
     "lua\zhuyin_key.lua",
-    "lua\zhuyin_partial.lua"
+    "lua\zhuyin_partial.lua",
+    "lua\zhuyin_completion.lua",
+    "lua\zhuyin_completion_data.lua",
+    "lua\zhuyin_bopomofo.lua"
 )
 foreach ($name in $required) {
     $remote = "$rimeDir/" + ($name -replace "\\", "/")

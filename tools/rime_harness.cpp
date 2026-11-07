@@ -351,6 +351,25 @@ int main() {
     run_case("english-hello-enter", "hello", XK_Return, "hello");
     run_case("boshiamy-invalid-space", "zzzz", ' ', "");
     run_case("boshiamy-invalid-enter", "zzzz", XK_Return, "zzzz");
+    // Continuous English: when only the raw candidate remains, Space is
+    // pushed into the buffer (it shows in the preedit) and Enter commits the
+    // whole sentence, spaces included.
+    run_preedit_case("english-was-space-preedit", "was ", "was ");
+    run_preedit_case("english-invalid-space-preedit", "zzzz ", "zzzz ");
+    run_case("english-sentence-enter", "hello world", XK_Return, "hello world");
+    run_case("english-sentence-trailing-space", "hello world ", XK_Return,
+             "hello world ");
+    // Digits are input while only raw English remains (they used to select
+    // candidate 1 and commit).  Enter commits the whole buffer.
+    run_preedit_case("english-was-digit-preedit", "was1", "was1");
+    run_case("english-was-digit-enter", "was1", XK_Return, "was1");
+    run_case("english-digits-enter", "hello123", XK_Return, "hello123");
+    run_case("english-digits-space-enter", "test 42", XK_Return, "test 42");
+    // A space after a digit must still join the English buffer (the tail is
+    // a raw segment, not an abc segment).
+    run_preedit_case("english-digit-space-preedit", "hello1 ", "hello1 ");
+    run_case("english-digit-then-space-enter", "hello1 world", XK_Return,
+             "hello1 world");
     run_case("zhuyin-su3", "`su3", ' ', "你");
     run_case("zhuyin-u", "`u", ' ', "一");
     run_case("zhuyin-su3cl3", "`su3cl3", ' ', "你好");
@@ -377,8 +396,15 @@ int main() {
     run_preedit_case("zhuyin-preedit-initial-b-tone", "`1u6", "ㄅㄧˊ");
     run_preedit_case("zhuyin-preedit-ba", "`18", "ㄅㄚ");
     run_context_case("context-zhuyin-ba", "`18");
-    run_case("zhuyin-initial-b-space", "`1", ' ', "");
-    run_case("zhuyin-initial-b-enter", "`1", XK_Return, "");
+    // An incomplete initial (no exact code) now has frequency-ordered
+    // prefix candidates, so Space/Enter commit the first one.
+    run_case("zhuyin-initial-b-space", "`1", ' ', "不");
+    run_case("zhuyin-initial-b-enter", "`1", XK_Return, "不");
+    run_context_case("context-zhuyin-initial-b", "`1");
+    run_count_case("zhuyin-count-initial-b", "`1", 1908);
+    // An exact syllable keeps its exact candidates first and appends the
+    // frequency-ordered completions (之/只/至... then 中/這...).
+    run_count_case("zhuyin-count-initial-zh", "`5", 2591);
     run_preedit_case("zhuyin-preedit-partial-next-syllable", "`su3c",
                      "ㄋㄧˇㄏ");
     run_case("zhuyin-partial-next-syllable-space", "`su3c", ' ', "");
@@ -425,8 +451,27 @@ int main() {
     run_select_case("zhuyin-su-shift2", "`su", '@', 1, "呢", true);
     run_select_case("zhuyin-su-toneless-first", "`su", '!', 1, "你", true);
     run_select_case("zhuyin-ji-toneless-first", "`ji", '!', 1, "我", true);
+    run_select_case("zhuyin-initial-b-shift2", "`1", '@', 1, "吧", true);
     run_case("zhuyin-invalid-ji2-space", "`ji2", ' ', "");
     run_case("zhuyin-su-plain-2-space", "`su2", ' ', "");
+
+    // A plain digit is still input while the prefix menu is open: `1 (ㄅ)
+    // then 8 (ㄚ) must become ㄅㄚ, not select the 8th candidate.
+    {
+        RimeSessionId session = g_api->create_session();
+        g_api->select_schema(session, "puffime");
+        send_string(session, "`1");
+        g_api->process_key(session, '8', 0);
+        RIME_STRUCT(RimeContext, ctx);
+        std::string preedit;
+        if (g_api->get_context(session, &ctx)) {
+            if (ctx.composition.preedit) preedit = ctx.composition.preedit;
+            g_api->free_context(&ctx);
+        }
+        out("CASE zhuyin-initial-b-digit-input preedit=[%s] expect [ㄅㄚ] %s\n",
+            preedit.c_str(), preedit == "ㄅㄚ" ? "OK" : "MISMATCH");
+        g_api->destroy_session(session);
+    }
 
     // Zhuyin digit selection must highlight only; space commits.
     run_highlight_case("zhuyin-ji3-after-plain-2", "`ji32");

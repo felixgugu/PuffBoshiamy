@@ -5,7 +5,12 @@
 -- out, ...) a selectable candidate even when the same letters are also a
 -- valid boshiamy code.  Enter commits the raw input directly (express_editor).
 --
--- Only plain lowercase letters/apostrophes are echoed; punctuation-heavy
+-- Spaces are part of the raw input while typing a sentence: boshiamy_space
+-- pushes them into the buffer when no Chinese candidate remains, so the
+-- preedit shows "hello world" and Enter commits the whole string.  The raw
+-- candidate mirrors the input (including its spaces).
+--
+-- Only plain lowercase letters/apostrophes/spaces are echoed; punctuation-heavy
 -- boshiamy symbol codes do not get an English candidate.
 
 local function translator(input, seg, env)
@@ -15,7 +20,7 @@ local function translator(input, seg, env)
   if input == "" then
     return
   end
-  if not input:match("^[a-z][a-z']*$") then
+  if not input:match("^[a-z][a-z' ]*$") then
     return
   end
   local cand = Candidate("raw", seg.start, seg._end, input, "英")

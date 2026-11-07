@@ -119,20 +119,54 @@ quality 的安排：
   `was`、`hello` 不是任何碼的前綴，才維持「空白不送出」。
 - 這是靜態字頻，不會學習個人選字；LIME 式學習需要另外的使用者詞庫或紀錄。
 
-### 無效拆碼的空白
+### 無效拆碼的空白與連續英文
 
 `english_raw.lua` 會為每個純字母輸入加一個 `(英)` 候選，所以無效拆碼也一定會有 menu。
-`boshiamy_space.lua` 是 `lua_processor`，在 `express_editor` 之前攔截 Space：
+`boshiamy_space.lua` 是 `lua_processor`，在 `speller` / `selector` / `express_editor`
+之前攔截 Space 與數字：
 
-- 目前 `abc` segment 的第一個候選 `type ~= "raw"`（有真正中文候選）→ kNoop，
-  讓 `express_editor` 照舊上屏 highlight 的候選。
-- 第一個候選是 `raw`（只有英文原文）或完全沒有候選 → kAccepted，吞掉空白，
-  留在緩衝讓使用者 Backspace 修正。
-- Enter 不攔截，`express_editor` 的 `commit_raw_input` 仍無條件把原文上屏。
+- 有真正中文候選（第一個候選 `type ~= "raw"`）→ 空白回 kNoop，讓
+  `express_editor` 照舊上屏 highlight 的候選；數字回 kNoop，交給 `selector` 選字。
+- 只剩英文（input 符合 `^[a-z][a-z0-9' ]*$`，且第一個候選是 `raw`）→
+  - 空白：`ctx:push_input(" ")`
+  - 數字 `0`–`9`：`ctx:push_input(string.char(keycode))`
+  preedit 會顯示 `hello world 42`，可以一直打下去，最後按 Enter 由
+  `commit_raw_input` 上屏整句。
+- 其他無效碼（含 `, . [ ]` 等字元）→ 空白 kAccepted，留在緩衝讓使用者
+  Backspace 修正，不會把錯碼上屏。
 
-因此 `was`、`hello`、`zzzz` + 空白不會上屏；要原文請按 Enter（或明確選 `(英)` 候選）。
-有效碼（例如 `the`）仍然可以用空白上屏第一個中文候選。補全候選的 `type` 是
-`completion`（不是 `raw`），所以 `out` 這類「碼的前綴」也會被視為有中文候選。
+為了讓空白留在 commit 的文字裡，`speller` 加了：
+
+```yaml
+speller:
+  delimiter: " "    # abc_segmentor 會把空白視為片段內的分隔符
+  use_space: false  # 空白仍不是一般字碼，只由 boshiamy_space 主動 push
+```
+
+如果沒有 `delimiter`，abc 片段會在空白處斷開，`Composition::GetCommitText()`
+會漏掉片段之間的空白。`english_raw.lua` 的 pattern 也放寬成
+`^[a-z][a-z' ]*$`，讓含空白的原文仍有 `(英)` 候選。
+
+數字不在 `speller/alphabet`，所以 push 之後 `abc_segmentor` 會在數字處切開，
+尾巴由 `fallback_segmentor` 變成 `raw` 片段；`Composition::GetPreedit()` 與
+`GetCommitText()` 都會把它接回去。副作用是打了數字後候選窗會收起（`raw`
+尾巴沒有候選），preedit 仍完整顯示。
+
+行為對照：
+
+| 輸入 | 結果 |
+|---|---|
+| `the` + 空白 | 棫（有效中文碼優先，不變） |
+| `out` + 空白 | 嚅（有補全候選，不變） |
+| `hello` + 空白 | 緩衝變 `hello `，不上屏 |
+| `hello world` + Enter | 上屏 `hello world` |
+| `zzzz` + 空白 | 緩衝變 `zzzz `，Enter 才上屏 |
+| `hello123` + Enter | 上屏 `hello123` |
+| `the` + `1` | 棫（有效中文碼，數字仍是選字） |
+| `,` + 空白 | `,`（符號，不變） |
+
+補全候選的 `type` 是 `completion`（不是 `raw`），所以 `out` 這類「碼的前綴」
+也會被視為有中文候選。
 
 ### 符號形狀
 
@@ -205,25 +239,32 @@ selector:
 「有聲調才用平數字選」。一聲音節請用 `Shift+數字`。若已打了一個有聲調的音節，
 要接一個數字開頭的新音節（例如 ㄉ），先按空白送出目前候選，再打數字。
 
-### 未完成的音節
+### 殘碼與前綴候選
 
 注音字典只收完整音節。像 `1`（ㄅ）、`q`（ㄆ）這種單獨的聲母不是合法音節，
 字典裡沒有條目；Rime 的 `table_translator` 查不到碼時會讓片段進入 kVoid，
-`preedit_format` 不生效，preedit 就顯示原始按鍵 `1`，而不是 `ㄅ`。
-
-修正方式不是把字典灌滿殘碼，而是：
+`preedit_format` 不生效，preedit 就顯示原始按鍵 `1`，而不是 `ㄅ`。修正方式
+不是把字典灌滿殘碼，而是：
 
 - `zhuyin/enable_completion: true`：未完成的碼至少能對到「以它開頭」的完整碼，
   片段不會消失。
-- `lua_filter@zhuyin_partial`：把 completion 候選處理掉。
-  - 有精確碼時：只輸出精確候選，候選清單與原本完全相同。
-  - 沒有精確碼時：只輸出一個 `zhuyin_partial` 佔位候選，並把它的 `preedit`
-    設成注音字串（`1` → `ㄅ`、`su3c` → `ㄋㄧˇㄏ`），preedit 就會正確顯示。
+- `lua_translator@zhuyin_completion`：`tools/make_zhuyin.py` 從字典產生
+  `dist/lua/zhuyin_completion_data.lua`（前綴 → 字，依 essay 字頻排序）。
+  - `1` → 不、吧、把、被、比…（所有 ㄅ 開頭的字）
+  - `5` → 先列精確的 ㄓ 字（之、只、至…），再列 ㄓㄨ／ㄓㄜ…（中、這…）
+  - 有精確碼的字會從補全清單排除，所以精確候選一定排最前面。
+  - 目前 54 個前綴、約 5.6 萬筆；只有 1–2 鍵的前綴會有補全清單。像 `18`
+    （ㄅㄚ）這種完整音節沒有延伸碼，清單是空的，所以不會冒出 ㄅㄢ 的字。
+- `lua_filter@zhuyin_partial`：丟掉 Rime 內建的 completion 候選（它的排序是
+  剩餘碼長，不是字頻），保留精確候選與 `zhuyin_completion`。若兩者都沒有
+  （例如 `su3c`、`ji2`），才輸出一個 `zhuyin_partial` 佔位候選，並把它的
+  `preedit` 設成注音字串（`1` → `ㄅ`、`su3c` → `ㄋㄧˇㄏ`）。
 - `zhuyin_digits.lua`：佔位候選是唯一候選時，空白與 Enter 會被吞掉，
   未完成的音節不會被上屏；平數字仍可繼續輸入（`1` → `u` → `6` = ㄅㄧˊ）。
+  有真正候選時，空白／Enter 上屏 highlight 的候選（和嘸蝦米一樣）。
 
-因此 `` ` `` + `1` 會顯示 `ㄅ`，而不是 `1`；`` ` `` + `su3c` 會顯示
-`ㄋㄧˇㄏ`。兩者按空白都不會送出。
+因此 `` ` `` + `1` 會顯示 `ㄅ` 並列出 ㄅ 開頭的常用字，空白上屏「不」；
+`` ` `` + `su3c` 會顯示 `ㄋㄧˇㄏ`，空白不會送出。
 
 ### 注音字典
 
@@ -513,7 +554,8 @@ recognizer:
 
 ## 已知取捨
 
-- 注音段用精確碼查表，不支援 abbreviation、句子連打；詞語以 essay 常見詞為主。
+- 注音段用精確碼查表，殘碼（例如 `1`）有字頻前綴候選；不支援 abbreviation、
+  句子連打；詞語以 essay 常見詞為主。
 - 無聲調查詢只支援單音節；`su` 會列所有聲調，但 `sucl`（無聲調「你好」）尚未支援。
 - 破音字詞語用前 3 個讀音組合，可能仍有少數詞的讀音沒被涵蓋。
 - 繁簡字同時存在，尚未過濾。
